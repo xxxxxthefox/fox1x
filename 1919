@@ -1,0 +1,62 @@
+_G.HeadSizeNPC = 15  -- حجم الرأس لجميع الـ NPCs
+_G.Disabled = false  -- تعطيل الكود عند الحاجة
+
+local RunService = game:GetService("RunService")
+local workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+
+-- وظيفة لتعديل خصائص الرأس لأي NPC
+local function modifyHead(npc)
+local character = npc
+if not character then return end
+
+local head = character:FindFirstChild("Head")  
+if not head then return end  
+
+-- إخفاء الرأس وتعديل حجمه  
+head.Size = Vector3.new(_G.HeadSizeNPC, _G.HeadSizeNPC, _G.HeadSizeNPC)  
+head.Transparency = 1   -- الرأس يصبح شفافًا بالكامل  
+head.BrickColor = BrickColor.new("Institutional white")  
+head.Material = Enum.Material.SmoothPlastic  
+head.CanCollide = false  
+head.Massless = true
+
+end
+
+-- وظيفة للتحقق من الـ NPC وتحديث حالته
+local function updateNPC(npc)
+if not npc:FindFirstChild("Humanoid") or not npc:FindFirstChild("HumanoidRootPart") then return end
+if Players:GetPlayerFromCharacter(npc) then return end  -- استبعاد اللاعبين الحقيقيين
+
+local isAlive = npc.Humanoid.Health > 0  
+if isAlive then  
+    modifyHead(npc)  
+end
+
+end
+
+-- تحديث جميع الـ NPCs في اللعبة
+local function updateAllNPCs()
+for _, npc in ipairs(workspace:GetDescendants()) do
+if npc:IsA("Model") and npc:FindFirstChild("Humanoid") and not Players:GetPlayerFromCharacter(npc) then
+updateNPC(npc)
+end
+end
+end
+
+-- تشغيل الكود كل إطار لضمان التحديث المستمر
+RunService.RenderStepped:Connect(function()
+if _G.Disabled then return end
+updateAllNPCs()
+end)
+
+RunService.RenderStepped:Connect(function()
+updateFOVDrawings()
+end)
+
+game.StarterGui:SetCore("SendNotification",  {
+    Title = "تم تشغيل";
+    Text = "xxxxxthefox";
+    Icon = "rbxassetid://115469660765124";
+    Duration = 20;
+})
