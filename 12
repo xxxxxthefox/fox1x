@@ -1,0 +1,159 @@
+local player = game.Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RemoteEvent = ReplicatedStorage.Events.Remote.ShotTarget
+local SoundService = game:GetService("SoundService")
+
+local targetTeamName = "Red" -- الفريق المستهدف مبدئيًا
+local cooldown = 0 -- الفاصل الزمني بين الطلقات
+local bulletSpeed = 49.5 -- سرعة الرصاصة
+local minPredictionDistance = 0
+local maxPredictionDistance = 10
+local lastShotTime = 0
+
+-- دالة لإظهار الإشعارات
+local function displayNotification(message)
+    local notification = Instance.new("ScreenGui")
+    notification.Name = "إشعار"
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Parent = notification
+    textLabel.Size = UDim2.new(0, 250, 0, 50)
+    textLabel.Position = UDim2.new(0.5, -125, 0.5, -25)
+    textLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.Text = message
+    textLabel.TextSize = 20
+    textLabel.Font = Enum.Font.SourceSansBold
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+    notification.Parent = player.PlayerGui
+
+    wait(2) -- مدة بقاء الإشعار
+    notification:Destroy()
+end
+
+-- دالة لتشغيل الصوت
+local function playSound(soundId, delay)
+    delay = delay or 0
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://" .. soundId
+    sound.Parent = SoundService
+    sound:Play()
+    wait(delay)
+    sound:Destroy()
+end
+
+-- تشغيل أصوات البداية
+spawn(function()
+    playSound(2865227271, 0.5)
+    wait(0.5)
+    playSound(1676318332)
+end)
+
+-- البحث عن أقرب لاعب من الفريق المستهدف
+local function findClosestPlayer()
+    local players = game.Players:GetPlayers()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+
+    local tool = player.Character and player.Character:FindFirstChildOfClass("Tool")
+    if tool and tool:FindFirstChild("Handle") then
+        local shooterPosition = tool.Handle.Position
+
+        for _, plyr in ipairs(players) do
+            if plyr ~= player and plyr.Team and plyr.Team.Name == targetTeamName and plyr.Character and plyr.Character:FindFirstChild("Humanoid") and plyr.Character.Humanoid.Health > 0 then
+                local targetRootPart = plyr.Character:FindFirstChild("HumanoidRootPart")
+                if targetRootPart then
+                    local totalDistance = (targetRootPart.Position - shooterPosition).magnitude
+                    if totalDistance < shortestDistance then
+                        closestPlayer = plyr
+                        shortestDistance = totalDistance
+                    end
+                end
+            end
+        end
+    else
+        print("⚠️ لم يتم العثور على سلاح!")
+    end
+
+    return closestPlayer
+end
+
+-- دالة لتوقع حركة الهدف
+local function predictPosition(targetPosition, targetVelocity)
+    local shooterPosition = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if shooterPosition then
+        local distanceToTarget = (targetPosition - shooterPosition.Position).magnitude
+        local predictionDistance = math.clamp(distanceToTarget, minPredictionDistance, maxPredictionDistance)
+        local timeToImpact = predictionDistance / bulletSpeed
+        return targetPosition + targetVelocity * timeToImpact
+    end
+    return targetPosition
+end
+
+-- إطلاق النار على الهدف
+local function fireRemoteEvent(targetPlayer)
+    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local currentTime = os.time()
+        if currentTime - lastShotTime >= cooldown then
+            local targetPosition = targetPlayer.Character.HumanoidRootPart.Position
+            local targetVelocity = targetPlayer.Character.HumanoidRootPart.Velocity
+
+            local predictedPosition = predictPosition(targetPosition, targetVelocity)
+
+            local args = {
+                [1] = predictedPosition,
+                [2] = "قناص"
+            }
+            pcall(function()
+                RemoteEvent:FireServer(unpack(args))
+            end)
+
+            -- تفعيل السلاح
+            local tool = player.Character and player.Character:FindFirstChildOfClass("Tool")
+            if tool then
+                tool:Activate()
+            end
+
+            lastShotTime = currentTime
+        end
+    else
+        print("⚠️ لا يوجد لاعب مستهدف!")
+        displayNotification("❌ لم يتم العثور على لاعب مناسب!")
+    end
+end
+
+-- تبديل الفريق المستهدف
+local function toggleTargetTeam()
+    if targetTeamName == "Red" then
+        targetTeamName = "Blue"
+    else
+        targetTeamName = "Red"
+    end
+    displayNotification("🎯 الآن تستهدف فريق " .. targetTeamName)
+end
+
+-- إنشاء واجهة رسومية
+local gui = Instance.new("ScreenGui")
+gui.Parent = game:GetService("CoreGui")
+
+-- زر تبديل الفريق المستهدف
+local teamToggleButton = Instance.new("TextButton")
+teamToggleButton.Parent = gui
+teamToggleButton.Position = UDim2.new(0.7, 0, 0.1, 0)
+teamToggleButton.Size = UDim2.new(0, 200, 0, 50)
+teamToggleButton.Text = "🔁 تبديل الفريق المستهدف"
+teamToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+teamToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+teamToggleButton.MouseButton1Click:Connect(toggleTargetTeam)
+
+-- زر استهداف أقرب لاعب
+local targetButton = Instance.new("TextButton")
+targetButton.Parent = gui
+targetButton.Position = UDim2.new(0.7, 0, 0.25, 0)
+targetButton.Size = UDim2.new(0, 200, 0, 50)
+targetButton.Text = "🎯 استهداف أقرب لاعب"
+targetButton.BackgroundColor3 = Color3.fromRGB(0, 128, 255)
+targetButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+targetButton.MouseButton1Click:Connect(function()
+    fireRemoteEvent(findClosestPlayer())
+end)
